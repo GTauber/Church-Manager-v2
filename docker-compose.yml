@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-church_schedule_db}
+      POSTGRES_USER:     ${POSTGRES_USER:-church_manager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-church}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - church_net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: >
+      redis-server --appendonly yes
+                  --requirepass ${REDIS_PASSWORD:-church}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - church_net
+
+  waha:
+    image: devlikeapro/waha:latest
+    platform: linux/amd64
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - waha_data:/app/.sessions
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - church_net
+
+  postgres-mcp:
+    image: crystaldba/postgres-mcp:latest
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    environment:
+      # Use postgres hostname for internal Docker network connections
+      DATABASE_URI: postgresql://church_manager:church@localhost:5432/church_schedule_db
+    command: ["--access-mode=unrestricted", "--transport=sse"]
+    depends_on:
+      - postgres
+    volumes:
+      - postgres_mcp:/root/.crystal
+    networks:
+      - church_net
+
+networks:
+  church_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  waha_data:
+  postgres_mcp:
